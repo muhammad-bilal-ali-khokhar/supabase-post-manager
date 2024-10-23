@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../utils/supabase';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
 const Home = () => {
     const router = useRouter();
@@ -11,13 +11,15 @@ const Home = () => {
     const [successMessage, setSuccessMessage] = useState('');
     const [isTokenValid, setIsTokenValid] = useState(false);
 
-    const query = new URLSearchParams(window.location.search);
-    const token = query.get('token');
-    const emailParam = query.get('email');
+    const searchParams = useSearchParams();
+    
+    // Retrieve query parameters
+    const token = searchParams.get('token');
+    const emailParam = searchParams.get('email');
 
     
   const pathname = usePathname();
-  const isInvitedUser = pathname.includes(query || emailParam)
+  const isInvitedUser = pathname.includes(searchParams || emailParam)
     useEffect(() => {
         const checkInviteToken = async () => {
             if (token && emailParam) {

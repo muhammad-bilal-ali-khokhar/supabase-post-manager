@@ -29,7 +29,7 @@ const UserForm = () => {
         }
 
         // Generate invite link
-        const inviteLink = `${window.location.origin}/?token=${inviteToken}&email=${encodeURIComponent(email)}`;
+        const inviteLink = `${`https://supabase-post-manager.vercel.app`}/?token=${inviteToken}&email=${encodeURIComponent(email)}`;
 
         // Output the invite link to manually share with the user
         console.log('Invite Link:', inviteLink);
