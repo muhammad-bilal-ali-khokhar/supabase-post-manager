@@ -1,9 +1,10 @@
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { supabase } from '../../utils/supabase';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
-const Home = () => {
+
+const HomeContent = () => {
     const router = useRouter();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -17,9 +18,9 @@ const Home = () => {
     const token = searchParams.get('token');
     const emailParam = searchParams.get('email');
 
-    
-  const pathname = usePathname();
-  const isInvitedUser = pathname.includes(searchParams || emailParam)
+    const pathname = usePathname();
+    const isInvitedUser = pathname.includes(searchParams || emailParam);
+
     useEffect(() => {
         const checkInviteToken = async () => {
             if (token && emailParam) {
@@ -145,8 +146,15 @@ const Home = () => {
             {renderForm()}
             {successMessage && <p className="text-green-500 mt-4">{successMessage}</p>}
             {errorMessage && <p className="text-red-500 mt-4">{errorMessage}</p>}
-            
         </div>
+    );
+};
+
+const Home = () => {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <HomeContent />
+        </Suspense>
     );
 };
 
