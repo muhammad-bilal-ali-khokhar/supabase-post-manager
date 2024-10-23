@@ -1,180 +1,151 @@
-'use client';
-import { useState, useEffect } from 'react';
+"use client";
+import React, { useEffect, useState } from 'react';
 import { supabase } from '../../utils/supabase';
+import { usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+const Home = () => {
+    const router = useRouter();
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [errorMessage, setErrorMessage] = useState('');
+    const [successMessage, setSuccessMessage] = useState('');
+    const [isTokenValid, setIsTokenValid] = useState(false);
 
-export default function Home() {
-  const [posts, setPosts] = useState([]);
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [postId, setPostId] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
+    const query = new URLSearchParams(window.location.search);
+    const token = query.get('token');
+    const emailParam = query.get('email');
 
-  const getPosts = async () => {
-    const { data, error } = await supabase.from('posts').select('*');
-    console.log({data, error})
-    if (error) {
-      console.error('Error fetching posts:', error);
-    } else {
-      setPosts(data);
-    }
-  };
+    
+  const pathname = usePathname();
+  const isInvitedUser = pathname.includes(query || emailParam)
+    useEffect(() => {
+        const checkInviteToken = async () => {
+            if (token && emailParam) {
+                setEmail(emailParam);
+                const { data: user, error } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('email', emailParam)
+                    .eq('invite_token', token)
+                    .single();
 
-  const handleSavePost = async () => {
-    if (!title || !content) return;
+                if (user && !error) {
+                    if (user.status === 'inactive') {
+                        setIsTokenValid(true);
+                    } else {
+                        setErrorMessage('This invite link is no longer valid.');
+                    }
+                } else {
+                    setErrorMessage('Invalid invite link.');
+                }
+            }
+        };
 
-    try {
-      setLoading(true);
-      if (isEditing) {
-        const { error } = await supabase
-          .from('posts')
-          .update({ title, content })
-          .eq('id', postId);
-        if (error) throw new Error('Error updating post');
-        getPosts();
-      } else {
-        const { error } = await supabase.from('posts').insert([{ title, content }]);
-        if (error) throw new Error('Error adding post');
-        getPosts();
-      }
-      setTitle('');
-      setContent('');
-      setPostId(null);
-      setIsEditing(false);
-      setShowModal(false);
-    } catch (err) {
-      setError(err.message);
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+        checkInviteToken();
+    }, [token, emailParam]);
 
-  const openAddModal = () => {
-    setTitle('');
-    setContent('');
-    setPostId(null);
-    setIsEditing(false);
-    setShowModal(true);
-  };
+    // Handle login submission
+    const handleLogin = async (e) => {
+        e.preventDefault();
 
-  const openEditModal = (post) => {
-    setTitle(post.title);
-    setContent(post.content);
-    setPostId(post.id);
-    setIsEditing(true);
-    setShowModal(true);
-  };
+        // If the user is trying to log in with the invited link
+        if (isTokenValid) {
+            // Update user status and password
+            const { error: updateError } = await supabase
+                .from('users')
+                .update({ status: 'active', password }) // Update status and password
+                .eq('email', email);
 
-  const deletePost = async (id) => {
-    const { error } = await supabase.from('posts').delete().eq('id', id);
-    if (error) {
-      console.error('Error deleting post:', error);
-    } else {
-      getPosts();
-    }
-  };
+            if (updateError) {
+                setErrorMessage('Error updating user status: ' + updateError.message);
+                return;
+            }
+            router.replace('/users');
+            setSuccessMessage('User logged in successfully and status updated to active.');
+            return;
+        }
 
-  useEffect(() => {
-    getPosts();
-  }, []);
+        // If user is trying to log in with email and password
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .single();
 
-  return (
-    <div className="min-h-screen p-8 pb-20 sm:p-20 bg-gradient-to-br from-gray-800 via-purple-600 to-gray-800 text-white font-sans relative overflow-hidden">
-      {/* Background Shining Animation */}
-      <div className="absolute inset-0 z-0 opacity-50">
-        <div className="absolute top-0 left-0 h-64 w-64 bg-gradient-to-r from-pink-500 to-red-500 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-0 right-0 h-64 w-64 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full blur-3xl animate-pulse delay-200"></div>
-      </div>
+        if (!user || error) {
+            setErrorMessage('Invalid email or password.');
+            return;
+        }
 
-      <h1 className="text-5xl mb-8 relative z-10 text-center animate-fade-in-up">
-        Supabase Posts Manager
-      </h1>
+        if (user.password !== password) {
+            setErrorMessage('Invalid email or password.');
+            return;
+        }
 
-      {/* Button to Open Add Modal */}
-      <button
-        onClick={openAddModal}
-        className="relative z-10 bg-gradient-to-r from-pink-500 to-purple-500 px-6 py-3 rounded hover:scale-110 transition-all transform duration-300 shadow-lg text-lg"
-        disabled={loading}
-      >
-        {loading ? 'Loading...' : 'Add Post'}
-      </button>
+        if (user.status === 'inactive') {
+            setErrorMessage('This account is not active. Please check your email for the activation link.');
+            return;
+        }
 
-      {/* Display Posts */}
-      <div className="relative z-10 mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {posts.length > 0 ? (
-          posts.map((post) => (
-            <div
-              key={post.id}
-              className="bg-gray-900 bg-opacity-70 backdrop-blur-md rounded-lg shadow-lg p-4 transition-transform transform hover:scale-105 group"
-            >
-              <div>
-                <h3 className="text-xl font-bold">{post.title}</h3>
-                <p className="text-sm mt-2">{post.content}</p>
-              </div>
-              <div className="flex space-x-4 mt-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <button
-                  onClick={() => openEditModal(post)}
-                  className="bg-yellow-500 px-4 py-2 square-button hover:bg-yellow-700 transition-all transform"
-                  disabled={loading}
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => deletePost(post.id)}
-                  className="bg-red-500 px-4 py-2 square-button hover:bg-red-700 transition-all transform"
-                  disabled={loading}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p>No posts found.</p>
-        )}
-      </div>
+        // If all checks pass, update status to active
+        const { error: updateError } = await supabase
+            .from('users')
+            .update({ status: 'active' }) // Update status to active
+            .eq('id', user.id);
 
-      {/* Modal for Add/Edit Post */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-20 animate-fade-in">
-          <div className="bg-white text-black p-8 rounded-xl shadow-lg w-1/3 transform scale-95 transition-all duration-300">
-            <h2 className="text-3xl mb-4">{isEditing ? 'Edit Post' : 'Add New Post'}</h2>
-            <input
-              type="text"
-              placeholder="Title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="block mb-4 p-4 w-full border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-            <textarea
-              placeholder="Content"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="block mb-4 p-4 w-full border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-            <div className="flex space-x-4">
-              <button
-                onClick={handleSavePost}
-                className="bg-green-500 px-6 py-3 square-button hover:bg-green-700 transition-all transform"
-                disabled={loading}
-              >
-                {loading ? 'Saving...' : isEditing ? 'Update Post' : 'Add Post'}
-              </button>
-              <button
-                onClick={() => setShowModal(false)}
-                className="bg-gray-500 px-6 py-3 square-button hover:bg-gray-700 transition-all transform"
-                disabled={loading}
-              >
-                Cancel
-              </button>
-            </div>
-            {error && <p className="text-red-500 mt-4">{error}</p>}
-          </div>
+        if (updateError) {
+            setErrorMessage('Error updating user status: ' + updateError.message);
+            return;
+        }
+        router.replace('/users');
+        setSuccessMessage('User logged in successfully and status updated to active.');
+    };
+
+    const renderForm = () => {
+        if (!isTokenValid && !isInvitedUser && errorMessage) {
+            return <p className="text-red-500">{errorMessage}</p>;
+        }
+
+        return (
+            <>
+                <form onSubmit={handleLogin}>
+                    <div className="mb-4">
+                        <label className="block text-gray-700">Email:</label>
+                        <input
+                            type="email"
+                            value={email}
+                            readOnly={!isInvitedUser}
+                            className="mt-1 p-2 border border-gray-300 rounded w-full bg-gray-100"
+                            onChange={(e) => setEmail(e.target.value)}
+                        />
+                    </div>
+                    <div className="mb-4">
+                        <label className="block text-gray-700">Password:</label>
+                        <input
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                            className="mt-1 p-2 border border-gray-300 rounded w-full"
+                        />
+                    </div>
+                    <button type="submit" className="bg-blue-500 text-white p-2 rounded w-full hover:bg-blue-600">
+                        Login
+                    </button>
+                </form>
+            </>
+        );
+    };
+
+    return (
+        <div className="max-w-md mx-auto bg-white p-6 rounded-lg shadow-lg mt-10">
+            <h2 className="text-2xl font-bold mb-4">Login</h2>
+            {renderForm()}
+            {successMessage && <p className="text-green-500 mt-4">{successMessage}</p>}
+            {errorMessage && <p className="text-red-500 mt-4">{errorMessage}</p>}
+            
         </div>
-      )}
-    </div>
-  );
-}
+    );
+};
+
+export default Home;
